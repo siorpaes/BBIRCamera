@@ -44,7 +44,7 @@ extern I2C_HandleTypeDef hi2c1;
     @returns True if device is set up, false on any failure
 */
 /**************************************************************************/
-int begin(uint8_t addr)
+int amg88xxInit(void)
 {
 	//enter normal mode
 	_pctl.PCTL = AMG88xx_NORMAL_MODE;
@@ -63,7 +63,7 @@ int begin(uint8_t addr)
 
 	HAL_Delay(100);
 
-	return 1;
+	return 0;
 }
 
 /**************************************************************************/
@@ -220,6 +220,12 @@ void readPixels(float *buf, uint8_t size)
 		converted = signedMag12ToFloat(recast) * AMG88xx_PIXEL_TEMP_CONVERSION;
 		buf[i] = converted;
 	}
+}
+
+
+void readPixelsRaw(int16_t* buf)
+{
+	read(AMG88xx_PIXEL_OFFSET, (uint8_t*)buf, 128);
 }
 
 /**************************************************************************/
