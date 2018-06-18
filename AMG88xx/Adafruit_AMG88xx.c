@@ -1,13 +1,41 @@
 #include "Adafruit_AMG88xx.h"
+#include "stm32f4xx_hal.h"
 
-//#define I2C_DEBUG 
+struct pctl _pctl;
+struct rst _rst;
+struct fpsc _fpsc;
+struct intc _intc;
+struct stat _stat;
+struct sclr _sclr;
+struct ave _ave;
+struct inthl _inthl;
+struct inthh _inthh;
+struct intll _intll;
+struct intlh _intlh;
+struct ihysl _ihysl;
+struct ihysh _ihysh;
+struct tthl _tthl;
+struct tthh _tthh;
 
-#if defined(ESP32)
-// https://github.com/espressif/arduino-esp32/issues/839
-  #define AMG_I2C_CHUNKSIZE 16
-#else
-  #define AMG_I2C_CHUNKSIZE 32
-#endif
+uint8_t getPCTL(void){ return _pctl.PCTL; }
+uint8_t getRST(void){	return _rst.RST; }
+uint8_t getFPSC(void){ return _fpsc.FPS & 0x01; }
+uint8_t getINTC(void){ return (_intc.INTMOD << 1 | _intc.INTEN) & 0x03; }
+uint8_t getSTAT(void){ return ( (_stat.OVF_THS << 3) | (_stat.OVF_IRS << 2) | (_stat.INTF << 1) ) & 0x07; }
+uint8_t getSCLR(void){ return ((_sclr.OVT_CLR << 3) | (_sclr.OVS_CLR << 2) | (_sclr.INTCLR << 1)) & 0x07; }
+uint8_t getAVE(void){ return (_ave.MAMOD << 5); }
+uint8_t getINTHL(void){ return _inthl.INT_LVL_H; }
+uint8_t getINTHH(void){ return _inthh.INT_LVL_H; }
+uint8_t getINTLL(void){ return _intll.INT_LVL_L; }
+uint8_t getINTLH(void){ return (_intlh.INT_LVL_L & 0xF); }
+uint8_t getIHYSL(void){ return _ihysl.INT_HYS; }
+uint8_t getIHYSH(void){ return (_ihysh.INT_HYS & 0xF); }
+uint8_t getTTHL(void){ return _tthl.TEMP; }
+uint8_t getTTHH(void){ return ( (_tthh.SIGN << 3) | _tthh.TEMP) & 0xF; }			
+uint8_t min(uint8_t a, uint8_t b){ return a < b ? a : b; }
+#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+
+extern I2C_HandleTypeDef hi2c1;
 
 /**************************************************************************/
 /*! 
@@ -16,30 +44,28 @@
     @returns True if device is set up, false on any failure
 */
 /**************************************************************************/
-bool Adafruit_AMG88xx::begin(uint8_t addr)
+int begin(uint8_t addr)
 {
 	_i2caddr = addr;
 	
-	_i2c_init();
-	
 	//enter normal mode
 	_pctl.PCTL = AMG88xx_NORMAL_MODE;
-	write8(AMG88xx_PCTL, _pctl.get());
+	write8(AMG88xx_PCTL, getPCTL());
 	
 	//software reset
 	_rst.RST = AMG88xx_INITIAL_RESET;
-	write8(AMG88xx_RST, _rst.get());
+	write8(AMG88xx_RST, getRST());
 	
 	//disable interrupts by default
 	disableInterrupt();
 	
 	//set to 10 FPS
 	_fpsc.FPS = AMG88xx_FPS_10;
-	write8(AMG88xx_FPSC, _fpsc.get());
+	write8(AMG88xx_FPSC, getFPSC());
 
-	delay(100);
+	HAL_Delay(100);
 
-	return true;
+	return 1;
 }
 
 /**************************************************************************/
@@ -48,10 +74,10 @@ bool Adafruit_AMG88xx::begin(uint8_t addr)
     @param  mode if True is passed, output will be twice the moving average
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::setMovingAverageMode(bool mode)
+void setMovingAverageMode(int mode)
 {
 	_ave.MAMOD = mode;
-	write8(AMG88xx_AVE, _ave.get());
+	write8(AMG88xx_AVE, getAVE());
 }
 
 /**************************************************************************/
@@ -61,9 +87,9 @@ void Adafruit_AMG88xx::setMovingAverageMode(bool mode)
     @param  low the value below which an interrupt will be triggered
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::setInterruptLevels(float high, float low)
+void setInterruptLevels(float high, float low)
 {
-	setInterruptLevels(high, low, high * .95);
+	setInterruptLevelsHist(high, low, high * .95f);
 }
 
 /**************************************************************************/
@@ -74,28 +100,28 @@ void Adafruit_AMG88xx::setInterruptLevels(float high, float low)
     @param hysteresis the hysteresis value for interrupt detection
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::setInterruptLevels(float high, float low, float hysteresis)
+void setInterruptLevelsHist(float high, float low, float hysteresis)
 {
 	int highConv = high / AMG88xx_PIXEL_TEMP_CONVERSION;
 	highConv = constrain(highConv, -4095, 4095);
 	_inthl.INT_LVL_H = highConv & 0xFF;
 	_inthh.INT_LVL_H = (highConv & 0xF) >> 4;
-	this->write8(AMG88xx_INTHL, _inthl.get());
-	this->write8(AMG88xx_INTHH, _inthh.get());
+	write8(AMG88xx_INTHL, getINTHL());
+	write8(AMG88xx_INTHH, getINTHH());
 	
 	int lowConv = low / AMG88xx_PIXEL_TEMP_CONVERSION;
 	lowConv = constrain(lowConv, -4095, 4095);
 	_intll.INT_LVL_L = lowConv & 0xFF;
 	_intlh.INT_LVL_L = (lowConv & 0xF) >> 4;
-	this->write8(AMG88xx_INTLL, _intll.get());
-	this->write8(AMG88xx_INTLH, _intlh.get());
+	write8(AMG88xx_INTLL, getINTLL());
+	write8(AMG88xx_INTLH, getINTLH());
 	
 	int hysConv = hysteresis / AMG88xx_PIXEL_TEMP_CONVERSION;
 	hysConv = constrain(hysConv, -4095, 4095);
 	_ihysl.INT_HYS = hysConv & 0xFF;
 	_ihysh.INT_HYS = (hysConv & 0xF) >> 4;
-	this->write8(AMG88xx_IHYSL, _ihysl.get());
-	this->write8(AMG88xx_IHYSH, _ihysh.get());
+	write8(AMG88xx_IHYSL, getIHYSL());
+	write8(AMG88xx_IHYSH, getIHYSH());
 }
 
 /**************************************************************************/
@@ -103,10 +129,10 @@ void Adafruit_AMG88xx::setInterruptLevels(float high, float low, float hysteresi
     @brief  enable the interrupt pin on the device.
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::enableInterrupt()
+void enableInterrupt()
 {
 	_intc.INTEN = 1;
-	this->write8(AMG88xx_INTC, _intc.get());
+	write8(AMG88xx_INTC, getINTC());
 }
 
 /**************************************************************************/
@@ -114,10 +140,10 @@ void Adafruit_AMG88xx::enableInterrupt()
     @brief  disable the interrupt pin on the device
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::disableInterrupt()
+void disableInterrupt()
 {
 	_intc.INTEN = 0;
-	this->write8(AMG88xx_INTC, _intc.get());
+	write8(AMG88xx_INTC, getINTC());
 }
 
 /**************************************************************************/
@@ -126,10 +152,10 @@ void Adafruit_AMG88xx::disableInterrupt()
     @param  mode passing AMG88xx_DIFFERENCE sets the device to difference mode, AMG88xx_ABSOLUTE_VALUE sets to absolute value mode.
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::setInterruptMode(uint8_t mode)
+void setInterruptMode(uint8_t mode)
 {
 	_intc.INTMOD = mode;
-	this->write8(AMG88xx_INTC, _intc.get());
+	write8(AMG88xx_INTC, getINTC());
 }
 
 /**************************************************************************/
@@ -140,11 +166,11 @@ void Adafruit_AMG88xx::setInterruptMode(uint8_t mode)
     @returns up to 8 bytes of data in buf
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::getInterrupt(uint8_t *buf, uint8_t size)
+void getInterrupt(uint8_t *buf, uint8_t size)
 {
 	uint8_t bytesToRead = min(size, (uint8_t)8);
 	
-	this->read(AMG88xx_INT_OFFSET, buf, bytesToRead);
+	read(AMG88xx_INT_OFFSET, buf, bytesToRead);
 }
 
 /**************************************************************************/
@@ -152,10 +178,10 @@ void Adafruit_AMG88xx::getInterrupt(uint8_t *buf, uint8_t size)
     @brief  Clear any triggered interrupts
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::clearInterrupt()
+void clearInterrupt()
 {
 	_rst.RST = AMG88xx_FLAG_RESET;
-	write8(AMG88xx_RST, _rst.get());
+	write8(AMG88xx_RST, getRST());
 }
 
 /**************************************************************************/
@@ -164,10 +190,10 @@ void Adafruit_AMG88xx::clearInterrupt()
     @returns a the floating point temperature in degrees Celsius
 */
 /**************************************************************************/
-float Adafruit_AMG88xx::readThermistor()
+float readThermistor()
 {
 	uint8_t raw[2];
-	this->read(AMG88xx_TTHL, raw, 2);
+	read(AMG88xx_TTHL, raw, 2);
 	uint16_t recast = ((uint16_t)raw[1] << 8) | ((uint16_t)raw[0]);
 
 	return signedMag12ToFloat(recast) * AMG88xx_THERMISTOR_CONVERSION;
@@ -181,13 +207,13 @@ float Adafruit_AMG88xx::readThermistor()
     @return up to 64 bytes of pixel data in buf
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::readPixels(float *buf, uint8_t size)
+void readPixels(float *buf, uint8_t size)
 {
 	uint16_t recast;
 	float converted;
 	uint8_t bytesToRead = min((uint8_t)(size << 1), (uint8_t)(AMG88xx_PIXEL_ARRAY_SIZE << 1));
 	uint8_t rawArray[bytesToRead];
-	this->read(AMG88xx_PIXEL_OFFSET, rawArray, bytesToRead);
+	read(AMG88xx_PIXEL_OFFSET, rawArray, bytesToRead);
 	
 	for(int i=0; i<size; i++){
 		uint8_t pos = i << 1;
@@ -205,9 +231,9 @@ void Adafruit_AMG88xx::readPixels(float *buf, uint8_t size)
     @param  value the value to write
 */
 /**************************************************************************/
-void Adafruit_AMG88xx::write8(byte reg, byte value)
+void write8(uint8_t reg, uint8_t value)
 {
-	this->write(reg, &value, 1);
+	write(reg, &value, 1);
 }
 
 /**************************************************************************/
@@ -217,65 +243,31 @@ void Adafruit_AMG88xx::write8(byte reg, byte value)
     @returns one byte of register data
 */
 /**************************************************************************/
-uint8_t Adafruit_AMG88xx::read8(byte reg)
+uint8_t read8(uint8_t reg)
 {
 	uint8_t ret;
-	this->read(reg, &ret, 1);
+	read(reg, &ret, 1);
 	
 	return ret;
 }
 
-void Adafruit_AMG88xx::_i2c_init()
-{
-	Wire.begin();
-}
 
-void Adafruit_AMG88xx::read(uint8_t reg, uint8_t *buf, uint8_t num)
+void read(uint8_t reg, uint8_t *buf, uint8_t num)
 {
-	uint8_t value;
-	uint8_t pos = 0;
+	HAL_StatusTypeDef err;
 	
-	//on arduino we need to read in AMG_I2C_CHUNKSIZE byte chunks
-	while(pos < num){
-		uint8_t read_now = min((uint8_t)AMG_I2C_CHUNKSIZE, (uint8_t)(num - pos));
-		Wire.beginTransmission((uint8_t)_i2caddr);
-		Wire.write((uint8_t)reg + pos);
-		Wire.endTransmission();
-		Wire.requestFrom((uint8_t)_i2caddr, read_now);
-
-#ifdef I2C_DEBUG
-		Serial.print("[$"); Serial.print(reg + pos, HEX); Serial.print("] -> ");
-#endif
-		for(int i=0; i<read_now; i++){
-			buf[pos] = Wire.read();
-#ifdef I2C_DEBUG
-			Serial.print("0x"); Serial.print(buf[pos], HEX); Serial.print(", ");
-#endif
-			pos++;
-		}
-#ifdef I2C_DEBUG
-		Serial.println();
-#endif
-	}
+	err = HAL_I2C_Mem_Read(&hi2c1, AMG88xx_ADDRESS<<1, reg, 1, buf, num, 0xffff);
+	if(err != HAL_OK)
+		while(1);
 }
 
-void Adafruit_AMG88xx::write(uint8_t reg, uint8_t *buf, uint8_t num)
+void write(uint8_t reg, uint8_t *buf, uint8_t num)
 {
-#ifdef I2C_DEBUG
-		Serial.print("[$"); Serial.print(reg, HEX); Serial.print("] <- ");
-#endif
-	Wire.beginTransmission((uint8_t)_i2caddr);
-	Wire.write((uint8_t)reg);
-	for (int i=0; i<num; i++) {
-	  Wire.write(buf[i]);
-#ifdef I2C_DEBUG
-	  Serial.print("0x"); Serial.print(buf[i], HEX); Serial.print(", ");
-#endif
-	}
-	Wire.endTransmission();
-#ifdef I2C_DEBUG
-	Serial.println();
-#endif
+	HAL_StatusTypeDef err;
+	
+	err = HAL_I2C_Mem_Write(&hi2c1, AMG88xx_ADDRESS<<1, reg, 1, buf, num, 0xffff);
+	if(err != HAL_OK)
+		while(1);
 }
 
 /**************************************************************************/
@@ -285,7 +277,7 @@ void Adafruit_AMG88xx::write(uint8_t reg, uint8_t *buf, uint8_t num)
     @returns the converted floating point value
 */
 /**************************************************************************/
-float Adafruit_AMG88xx::signedMag12ToFloat(uint16_t val)
+float signedMag12ToFloat(uint16_t val)
 {
 	//take first 11 bits as absolute val
 	uint16_t absVal = (val & 0x7FF);

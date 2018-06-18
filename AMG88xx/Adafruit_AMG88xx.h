@@ -1,13 +1,7 @@
 #ifndef LIB_ADAFRUIT_AMG88XX_H
 #define LIB_ADAFRUIT_AMG88XX_H
 
-#if (ARDUINO >= 100)
- #include "Arduino.h"
-#else
- #include "WProgram.h"
-#endif
-
-#include <Wire.h>
+#include <stdint.h>
 
 /*=========================================================================
     I2C ADDRESS/BITS
@@ -20,7 +14,7 @@
     -----------------------------------------------------------------------*/
     enum
     {
-        AMG88xx_PCTL = 0x00,
+    AMG88xx_PCTL = 0x00,
 		AMG88xx_RST = 0x01,
 		AMG88xx_FPSC = 0x02,
 		AMG88xx_INTC = 0x03,
@@ -70,79 +64,59 @@
 /*=========================================================================*/
 
 #define AMG88xx_PIXEL_ARRAY_SIZE 64
-#define AMG88xx_PIXEL_TEMP_CONVERSION .25
-#define AMG88xx_THERMISTOR_CONVERSION .0625
+#define AMG88xx_PIXEL_TEMP_CONVERSION .25f
+#define AMG88xx_THERMISTOR_CONVERSION .0625f
 
 /**************************************************************************/
 /*! 
     @brief  Class that stores state and functions for interacting with AMG88xx IR sensor chips
 */
 /**************************************************************************/
-class Adafruit_AMG88xx {
-	public:
-		//constructors
-		Adafruit_AMG88xx(void) {};
-		~Adafruit_AMG88xx(void) {};
+	
 		
-		bool begin(uint8_t addr = AMG88xx_ADDRESS);
-		
-		void readPixels(float *buf, uint8_t size = AMG88xx_PIXEL_ARRAY_SIZE);
-		float readThermistor();
-		
-		void setMovingAverageMode(bool mode);
-		
-		void	  enableInterrupt();
-		void	  disableInterrupt();
+		void readPixels(float *buf, uint8_t size/* = AMG88xx_PIXEL_ARRAY_SIZE */);
+		float readThermistor(void);
+		void setMovingAverageMode(int mode);
+		void	  enableInterrupt(void);
+		void	  disableInterrupt(void);
 		void	  setInterruptMode(uint8_t mode);
-		void	  getInterrupt(uint8_t *buf, uint8_t size = 8);
-		void	  clearInterrupt();
+		void	  getInterrupt(uint8_t *buf, uint8_t /*size = 8 */);
+		void	  clearInterrupt(void);
 				
 		//this will automatically set hysteresis to 95% of the high value
 		void	  setInterruptLevels(float high, float low);
 				
 		//this will manually set hysteresis
-		void	  setInterruptLevels(float high, float low, float hysteresis);
+		void	  setInterruptLevelsHist(float high, float low, float hysteresis);
 		
-	private:
 		uint8_t _i2caddr;
 		
-		void      write8(byte reg, byte value);
-		void      write16(byte reg, uint16_t value);
-        uint8_t   read8(byte reg);
+		void      write8(uint8_t reg, uint8_t value);
+		void      write16(uint8_t reg, uint16_t value);
+    uint8_t   read8(uint8_t reg);
 		
 		void read(uint8_t reg, uint8_t *buf, uint8_t num);
 		void write(uint8_t reg, uint8_t *buf, uint8_t num);
-		void _i2c_init();
+		void _i2c_init(void);
 		
 		float signedMag12ToFloat(uint16_t val);
 		
 		 // The power control register
-        struct pctl {
+     struct pctl {
             // 0x00 = Normal Mode
 			// 0x01 = Sleep Mode
 			// 0x20 = Stand-by mode (60 sec intermittence)
-			// 0x21 = Stand-by mode (10 sec intermittence)
-           
-            uint8_t PCTL : 8;
+			// 0x21 = Stand-by mode (10 sec intermittence)         
+         uint8_t PCTL : 8;
+     };
 
-            uint8_t get() {
-                return PCTL;
-            }
-        };
-        pctl _pctl;
 		
 		//reset register
 		struct rst {
 			//0x30 = flag reset (all clear status reg 0x04, interrupt flag and interrupt table)
 			//0x3F = initial reset (brings flag reset and returns to initial setting)
-			
 			uint8_t RST : 8;
-			
-			uint8_t get() {
-				return RST;
-			}
 		};
-		rst _rst;
 		
 		//frame rate register
 		struct fpsc {
@@ -150,12 +124,9 @@ class Adafruit_AMG88xx {
 			//0 = 10FPS
 			//1 = 1FPS
 			uint8_t FPS : 1;
-			
-			uint8_t get() {
-				return FPS & 0x01;
-			}
+
 		};
-		fpsc _fpsc;
+		
 		
 		//interrupt control register
 		struct intc {
@@ -167,12 +138,8 @@ class Adafruit_AMG88xx {
 			// 0 = Difference interrupt mode
 			// 1 = absolute value interrupt mode
 			uint8_t INTMOD : 1;
-			
-			uint8_t get(){
-				return (INTMOD << 1 | INTEN) & 0x03;
-			}
+
 		};
-		intc _intc;
 		
 		//status register
 		struct stat {
@@ -186,11 +153,8 @@ class Adafruit_AMG88xx {
 			//thermistor temperature output overflow (value of thermistor)
 			uint8_t OVF_THS : 1;
 			
-			uint8_t get(){
-				return ( (OVF_THS << 3) | (OVF_IRS << 2) | (INTF << 1) ) & 0x07;
-			}
+
 		};
-		stat _stat;
 		
 		//status clear register
 		//write to clear overflow flag and interrupt flag
@@ -204,11 +168,8 @@ class Adafruit_AMG88xx {
 			//thermistor temp output overflow flag clear
 			uint8_t OVT_CLR : 1;
 			
-			uint8_t get(){
-				return ((OVT_CLR << 3) | (OVS_CLR << 2) | (INTCLR << 1)) & 0x07;
-			}
+	
 		};
-		sclr _sclr;
 		
 		//average register
 		//for setting moving average output mode
@@ -217,11 +178,8 @@ class Adafruit_AMG88xx {
 			//1 = twice moving average mode
 			uint8_t MAMOD : 1;
 			
-			uint8_t get(){
-				return (MAMOD << 5);
-			}
+
 		};
-		struct ave _ave;
 		
 		//interrupt level registers
 		//for setting upper / lower limit hysteresis on interrupt level
@@ -230,82 +188,42 @@ class Adafruit_AMG88xx {
 		// and interrupt pixel table are set when value exceeds set value
 		struct inthl {
 			uint8_t INT_LVL_H : 8;
-			
-			uint8_t get(){
-				return INT_LVL_H;
-			}
 		};
-		struct inthl _inthl;
 		
 		struct inthh {
 			uint8_t INT_LVL_H : 4;
-			
-			uint8_t get(){
-				return INT_LVL_H;
-			}
 		};
-		struct inthh _inthh;
 		
 		//interrupt level lower limit. Interrupt output
 		//and interrupt pixel table are set when value is lower than set value
 		struct intll {
 			uint8_t INT_LVL_L : 8;
-			
-			uint8_t get(){
-				return INT_LVL_L;
-			}
 		};
-		struct intll _intll;
 		
 		struct intlh {
 			uint8_t INT_LVL_L : 4;
-			
-			uint8_t get(){
-				return (INT_LVL_L & 0xF);
-			}
 		};
-		struct intlh _intlh;
 		
 		//setting of interrupt hysteresis level when interrupt is generated.
 		//should not be higher than interrupt level
 		struct ihysl {
 			uint8_t INT_HYS : 8;
-			
-			uint8_t get(){
-				return INT_HYS;
-			}
 		};
-		struct ihysl _ihysl;
 		
 		struct ihysh {
 			uint8_t INT_HYS : 4;
-			
-			uint8_t get(){
-				return (INT_HYS & 0xF);
-			}
 		};
-		struct ihysh _ihysh;
 		
 		//thermistor register
 		//SIGNED MAGNITUDE FORMAT
 		struct tthl {
 			uint8_t TEMP : 8;
-			
-			uint8_t get(){
-				return TEMP;
-			}
 		};
-		struct tthl _tthl;
 		
 		struct tthh {
 			uint8_t TEMP : 3;
 			uint8_t SIGN : 1;
-			
-			uint8_t get(){
-				return ( (SIGN << 3) | TEMP) & 0xF;
-			}
 		};
-		struct tthh _tthh;
 		
 		//temperature registers 0x80 - 0xFF
 		/*
@@ -330,8 +248,7 @@ class Adafruit_AMG88xx {
 		};
 		struct t01h _t01h;
 		*/
-		
-		
-};
+
 
 #endif
+
