@@ -6,7 +6,7 @@
 /*=========================================================================
     I2C ADDRESS/BITS
     -----------------------------------------------------------------------*/
-    #define AMG88xx_ADDRESS                (0x69)
+    #define AMG88xx_ADDRESS                (0x68)
 /*=========================================================================*/
 
 /*=========================================================================
@@ -88,8 +88,6 @@
 				
 		//this will manually set hysteresis
 		void	  setInterruptLevelsHist(float high, float low, float hysteresis);
-		
-		uint8_t _i2caddr;
 		
 		void      write8(uint8_t reg, uint8_t value);
 		void      write16(uint8_t reg, uint16_t value);

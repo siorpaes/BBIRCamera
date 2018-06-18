@@ -46,8 +46,6 @@ extern I2C_HandleTypeDef hi2c1;
 /**************************************************************************/
 int begin(uint8_t addr)
 {
-	_i2caddr = addr;
-	
 	//enter normal mode
 	_pctl.PCTL = AMG88xx_NORMAL_MODE;
 	write8(AMG88xx_PCTL, getPCTL());
@@ -256,7 +254,7 @@ void read(uint8_t reg, uint8_t *buf, uint8_t num)
 {
 	HAL_StatusTypeDef err;
 	
-	err = HAL_I2C_Mem_Read(&hi2c1, AMG88xx_ADDRESS<<1, reg, 1, buf, num, 0xffff);
+	err = HAL_I2C_Mem_Read(&hi2c1, (AMG88xx_ADDRESS<<1), reg, 1, buf, num, 0xffff);
 	if(err != HAL_OK)
 		while(1);
 }
@@ -265,7 +263,7 @@ void write(uint8_t reg, uint8_t *buf, uint8_t num)
 {
 	HAL_StatusTypeDef err;
 	
-	err = HAL_I2C_Mem_Write(&hi2c1, AMG88xx_ADDRESS<<1, reg, 1, buf, num, 0xffff);
+	err = HAL_I2C_Mem_Write(&hi2c1, (AMG88xx_ADDRESS<<1), reg, 1, buf, num, 0xffff);
 	if(err != HAL_OK)
 		while(1);
 }
