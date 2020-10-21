@@ -23,3 +23,4 @@ Pinout for NUCLEO-F401RE board
 | ILI9341 RST  |   PB13   |      CN10-30     |
 | ILI9341 D/C  |   PB14   |      CN10-28     |
 
+Important note: as AMG8833 sensor I2C address is configurable using dedicated input, make sure that it matches with the address defined in driver's header file.
